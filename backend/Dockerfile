@@ -26,6 +26,7 @@ RUN CGO_ENABLED=0 go build -o /out/gateway  ./cmd/gateway  \
 
 FROM gcr.io/distroless/static-debian12 AS gateway
 COPY --from=builder /out/gateway /app
+COPY static /static
 ENTRYPOINT ["/app"]
 
 FROM gcr.io/distroless/static-debian12 AS city

@@ -1,6 +1,7 @@
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 
+import '../config/app_config.dart';
 import '../theme/app_tokens.dart';
 
 /// Seeded artwork for records that have no photo.
@@ -94,11 +95,20 @@ class CoverImage extends StatelessWidget {
   final int seed;
   final String? label;
 
+  /// The API returns paths like `/static/cities/batumi.jpg`; make them
+  /// absolute against whichever gateway this build points at.
+  String get _resolved {
+    final u = url.trim();
+    if (u.isEmpty) return '';
+    if (u.startsWith('http://') || u.startsWith('https://')) return u;
+    return '${AppConfig.apiBaseUrl}${u.startsWith('/') ? '' : '/'}$u';
+  }
+
   @override
   Widget build(BuildContext context) {
-    if (url.trim().isEmpty) return SeededArt(seed: seed, label: label);
+    if (_resolved.isEmpty) return SeededArt(seed: seed, label: label);
     return CachedNetworkImage(
-      imageUrl: url,
+      imageUrl: _resolved,
       fit: BoxFit.cover,
       fadeInDuration: const Duration(milliseconds: 220),
       placeholder: (_, __) => const ColoredBox(color: AppColors.tealWash),

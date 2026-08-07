@@ -5,6 +5,8 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
+
+	"georgia-travel-guide/internal/config"
 )
 
 // Server is the API Gateway: REST in, gRPC out.
@@ -23,6 +25,11 @@ func (s *Server) Router() http.Handler {
 	r.Get("/health", func(w http.ResponseWriter, _ *http.Request) {
 		writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
 	})
+
+	// City photos and other static assets, served straight off disk.
+	staticDir := config.Getenv("STATIC_DIR", "/static")
+	fileServer := http.FileServer(http.Dir(staticDir))
+	r.Handle("/static/*", http.StripPrefix("/static/", fileServer))
 
 	r.Route("/api", func(api chi.Router) {
 		// public auth
