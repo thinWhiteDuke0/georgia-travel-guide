@@ -1,3 +1,4 @@
+
 # საქართველოს ტურისტული გზამკვლევი / Georgia Travel Guide
 
 მობილური აპლიკაცია, რომელიც წარმოადგენს საქართველოს ქალაქების ციფრულ ტურისტულ
@@ -5,6 +6,8 @@
 
 A mobile tourist guide to the cities of Georgia, built on a microservice
 backend. Bachelor's thesis project.
+
+https://github.com/user-attachments/assets/38128fd8-870d-46a6-8488-08659dc568b6
 
 ---
 
