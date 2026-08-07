@@ -1,0 +1,35 @@
+# ---- secrets ----
+.env
+*.local
+
+# ---- Go ----
+backend/internal/pb/
+backend/out/
+*.exe
+
+# ---- .NET ----
+backend/services/auth/bin/
+backend/services/auth/obj/
+
+# ---- Flutter / Dart ----
+mobile/.dart_tool/
+mobile/build/
+mobile/.flutter-plugins
+mobile/.flutter-plugins-dependencies
+mobile/.packages
+mobile/pubspec.lock
+
+# Generated platform folders (recreate with `flutter create .`)
+mobile/android/
+mobile/ios/
+mobile/web/
+mobile/windows/
+mobile/macos/
+mobile/linux/
+
+# ---- IDE / OS ----
+.idea/
+.vscode/
+*.iml
+.DS_Store
+Thumbs.db

@@ -1,0 +1,18 @@
+syntax = "proto3";
+package favorite;
+option go_package = "georgia-travel-guide/internal/pb/favorite;favoritepb";
+
+message Favorite {
+  int64  id=1; int64 user_id=2; string entity_type=3; int64 entity_id=4;
+}
+message AddFavoriteRequest    { int64 user_id=1; string entity_type=2; int64 entity_id=3; }
+message RemoveFavoriteRequest { int64 user_id=1; string entity_type=2; int64 entity_id=3; }
+message ListFavoritesRequest  { int64 user_id=1; }
+message ListFavoritesResponse { repeated Favorite favorites = 1; }
+message Empty {}
+
+service FavoriteService {
+  rpc AddFavorite    (AddFavoriteRequest)    returns (Favorite);
+  rpc RemoveFavorite (RemoveFavoriteRequest) returns (Empty);
+  rpc ListFavorites  (ListFavoritesRequest)  returns (ListFavoritesResponse);
+}
