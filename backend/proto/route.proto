@@ -1,0 +1,16 @@
+syntax = "proto3";
+package route;
+option go_package = "georgia-travel-guide/internal/pb/route;routepb";
+
+message Route {
+  int64  id=1; int64 city_id=2; string title=3; string description=4;
+  double duration_hours=5; string difficulty=6;
+}
+message ListRoutesRequest  { int64 city_id = 1; }
+message ListRoutesResponse { repeated Route routes = 1; }
+message GetRouteRequest    { int64 id = 1; }
+
+service RouteService {
+  rpc ListRoutes (ListRoutesRequest) returns (ListRoutesResponse);
+  rpc GetRoute   (GetRouteRequest)   returns (Route);
+}

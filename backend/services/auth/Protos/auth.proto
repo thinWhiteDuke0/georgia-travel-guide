@@ -1,0 +1,21 @@
+syntax = "proto3";
+package auth;
+option go_package = "georgia-travel-guide/internal/pb/auth;authpb";
+option csharp_namespace = "GeorgiaGuide.Auth.Protos";
+
+message RegisterRequest { string email=1; string password=2; string full_name=3; }
+message LoginRequest    { string email=1; string password=2; }
+message RefreshRequest  { string refresh_token=1; }
+message TokenResponse   { string access_token=1; string refresh_token=2; int64 user_id=3; }
+
+message Profile              { int64 id=1; string email=2; string full_name=3; string avatar_url=4; }
+message GetProfileRequest    { int64 user_id=1; }
+message UpdateProfileRequest { int64 user_id=1; string full_name=2; string avatar_url=3; }
+
+service AuthService {
+  rpc Register      (RegisterRequest)      returns (TokenResponse);
+  rpc Login         (LoginRequest)         returns (TokenResponse);
+  rpc Refresh       (RefreshRequest)       returns (TokenResponse);
+  rpc GetProfile    (GetProfileRequest)    returns (Profile);
+  rpc UpdateProfile (UpdateProfileRequest) returns (Profile);
+}

@@ -1,0 +1,80 @@
+# Render Blueprint — deploys the whole project from this repository.
+#
+# Free-tier shape:
+#   backend  : gateway + the four Go services in one container
+#   auth     : the .NET authentication service
+#   web      : the Flutter web build, served as a static site (never sleeps)
+#   database : managed PostgreSQL
+#
+# Note: free web services sleep after 15 minutes of inactivity and take
+# 30–60 seconds to wake. The static site is always on.
+
+databases:
+  - name: guide-db
+    databaseName: guide
+    user: guide
+    plan: free
+
+services:
+  # ------------------------------------------------------------- backend
+  - type: web
+    name: guide-backend
+    runtime: docker
+    plan: free
+    rootDir: backend
+    dockerfilePath: ./Dockerfile.render
+    healthCheckPath: /health
+    autoDeploy: true
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: guide-db
+          property: connectionString
+      - key: JWT_SECRET
+        sync: false          # set the same value on guide-auth
+      - key: RUN_MIGRATIONS
+        value: "true"
+      - key: RUN_SEED
+        value: "true"
+      - key: STATIC_DIR
+        value: /static
+      - key: AUTH_ADDR
+        sync: false          # e.g. guide-auth.onrender.com:443
+
+  # ---------------------------------------------------------------- auth
+  - type: web
+    name: guide-auth
+    runtime: docker
+    plan: free
+    rootDir: backend/services/auth
+    dockerfilePath: ./Dockerfile
+    autoDeploy: true
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: guide-db
+          property: connectionString
+      - key: JWT_SECRET
+        sync: false          # must match guide-backend exactly
+      - key: PORT
+        value: "5001"
+
+  # ----------------------------------------------------------- flutter web
+  - type: web
+    name: guide-web
+    runtime: static
+    plan: free
+    rootDir: mobile
+    buildCommand: >-
+      flutter create --project-name georgia_travel_guide --platforms=web . &&
+      flutter pub get &&
+      flutter build web --release --dart-define=API_BASE_URL=$API_BASE_URL
+    staticPublishPath: build/web
+    autoDeploy: true
+    envVars:
+      - key: API_BASE_URL
+        sync: false          # e.g. https://guide-backend.onrender.com
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html

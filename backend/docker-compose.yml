@@ -1,0 +1,103 @@
+name: georgia-travel-guide
+
+x-db-env: &db-env
+  DB_HOST: postgres
+  DB_PORT: "5432"
+  DB_USER: guide
+  DB_PASSWORD: guide
+  DB_NAME: guide
+
+services:
+  postgres:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: guide
+      POSTGRES_PASSWORD: guide
+      POSTGRES_DB: guide
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./db/migrations/001_init.sql:/docker-entrypoint-initdb.d/001_init.sql:ro
+      - ./db/seed.sql:/docker-entrypoint-initdb.d/002_seed.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U guide"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+
+  adminer:
+    image: adminer:4
+    ports:
+      - "8081:8080"
+    depends_on:
+      - postgres
+
+  auth:
+    build:
+      context: ./services/auth
+    environment:
+      <<: *db-env
+      PORT: "5001"
+      JWT_SECRET: ${JWT_SECRET:-dev-only-insecure-secret-change-me-32bytes-min}
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  city:
+    build: { context: ., dockerfile: Dockerfile, target: city }
+    environment:
+      <<: *db-env
+      PORT: "5002"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  places:
+    build: { context: ., dockerfile: Dockerfile, target: places }
+    environment:
+      <<: *db-env
+      PORT: "5003"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  route:
+    build: { context: ., dockerfile: Dockerfile, target: route }
+    environment:
+      <<: *db-env
+      PORT: "5004"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  favorite:
+    build: { context: ., dockerfile: Dockerfile, target: favorite }
+    environment:
+      <<: *db-env
+      PORT: "5005"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  gateway:
+    build: { context: ., dockerfile: Dockerfile, target: gateway }
+    environment:
+      PORT: "8080"
+      JWT_SECRET: ${JWT_SECRET:-dev-only-insecure-secret-change-me-32bytes-min}
+      AUTH_ADDR: auth:5001
+      CITY_ADDR: city:5002
+      PLACES_ADDR: places:5003
+      ROUTE_ADDR: route:5004
+      FAVORITE_ADDR: favorite:5005
+    ports:
+      - "8080:8080"
+    depends_on:
+      - auth
+      - city
+      - places
+      - route
+      - favorite
+
+volumes:
+  pgdata:

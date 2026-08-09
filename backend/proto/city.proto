@@ -1,0 +1,30 @@
+syntax = "proto3";
+package city;
+option go_package = "georgia-travel-guide/internal/pb/city;citypb";
+
+message City {
+  int64  id          = 1;
+  string name        = 2;
+  string region      = 3;
+  string description  = 4;
+  string image_url    = 5;
+  double latitude     = 6;
+  double longitude    = 7;
+}
+
+message ListCitiesRequest {
+  int32  page      = 1;
+  int32  page_size = 2;
+  string region    = 3;
+  string search    = 4;
+}
+message ListCitiesResponse {
+  repeated City cities = 1;
+  int32         total  = 2;
+}
+message GetCityRequest { int64 id = 1; }
+
+service CityService {
+  rpc ListCities (ListCitiesRequest) returns (ListCitiesResponse);
+  rpc GetCity    (GetCityRequest)    returns (City);
+}

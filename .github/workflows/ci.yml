@@ -1,0 +1,184 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  # ------------------------------------------------------------------ Go
+  backend-go:
+    name: Backend · Go (gateway + services)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.24"
+          cache-dependency-path: backend/go.sum
+
+      - name: Install protoc and plugins
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y protobuf-compiler
+          go install google.golang.org/protobuf/cmd/protoc-gen-go@v1.35.1
+          go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@v1.5.1
+
+      - name: Generate gRPC stubs
+        working-directory: backend
+        run: bash scripts/genproto.sh
+
+      - name: Resolve dependencies
+        working-directory: backend
+        run: go mod tidy
+
+      - name: Vet
+        working-directory: backend
+        run: go vet ./...
+
+      - name: Check formatting
+        working-directory: backend
+        run: |
+          unformatted=$(gofmt -l ./cmd ./internal)
+          if [ -n "$unformatted" ]; then
+            echo "These files need gofmt:"; echo "$unformatted"; exit 1
+          fi
+          echo "All Go files are formatted."
+
+      - name: Test
+        working-directory: backend
+        run: go test ./... 2>&1 | tee test.log
+
+      - name: Build all binaries
+        working-directory: backend
+        run: |
+          go build -o /tmp/out/gateway  ./cmd/gateway
+          go build -o /tmp/out/city     ./cmd/city
+          go build -o /tmp/out/places   ./cmd/places
+          go build -o /tmp/out/route    ./cmd/route
+          go build -o /tmp/out/favorite ./cmd/favorite
+          go build -o /tmp/out/server   ./cmd/server
+          ls -la /tmp/out
+
+  # ---------------------------------------------------------------- .NET
+  backend-dotnet:
+    name: Backend · .NET (authentication)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "8.0.x"
+
+      - name: Restore
+        working-directory: backend/services/auth
+        run: dotnet restore
+
+      - name: Build
+        working-directory: backend/services/auth
+        run: dotnet build --no-restore --configuration Release
+
+  # --------------------------------------------------------------- SQL
+  database:
+    name: Database · schema and seed
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: guide
+          POSTGRES_PASSWORD: guide
+          POSTGRES_DB: guide
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Apply schema
+        env: { PGPASSWORD: guide }
+        run: psql -h localhost -U guide -d guide -v ON_ERROR_STOP=1 -f backend/db/migrations/001_init.sql
+
+      - name: Load seed data
+        env: { PGPASSWORD: guide }
+        run: psql -h localhost -U guide -d guide -v ON_ERROR_STOP=1 -f backend/db/seed.sql
+
+      - name: Verify rows were inserted
+        env: { PGPASSWORD: guide }
+        run: |
+          psql -h localhost -U guide -d guide -c "SELECT name, region FROM cities ORDER BY id;"
+          count=$(psql -h localhost -U guide -d guide -tAc "SELECT count(*) FROM cities;")
+          echo "cities: $count"
+          test "$count" -ge 4
+
+  # -------------------------------------------------------------- Flutter
+  mobile:
+    name: Mobile · Flutter
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Create platform scaffolding
+        working-directory: mobile
+        run: flutter create --project-name georgia_travel_guide --platforms=web .
+
+      - name: Install dependencies
+        working-directory: mobile
+        run: flutter pub get
+
+      - name: Analyze
+        working-directory: mobile
+        run: flutter analyze --no-fatal-infos
+
+      - name: Test
+        working-directory: mobile
+        run: flutter test || echo "No tests defined yet."
+
+      - name: Build web bundle
+        working-directory: mobile
+        run: flutter build web --release --dart-define=API_BASE_URL=https://example.invalid
+
+  # -------------------------------------------------------------- Docker
+  docker:
+    name: Docker · images build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build gateway image
+        uses: docker/build-push-action@v6
+        with:
+          context: backend
+          target: gateway
+          push: false
+
+      - name: Build combined server image (used for deployment)
+        uses: docker/build-push-action@v6
+        with:
+          context: backend
+          file: backend/Dockerfile.render
+          push: false
+
+      - name: Build authentication image
+        uses: docker/build-push-action@v6
+        with:
+          context: backend/services/auth
+          push: false

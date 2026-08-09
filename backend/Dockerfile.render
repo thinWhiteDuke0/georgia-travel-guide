@@ -1,0 +1,27 @@
+# Single-image build used for free-tier hosting: the gateway and all four Go
+# microservices run in one container (see cmd/server/main.go for why).
+FROM golang:1.25 AS builder
+WORKDIR /src
+
+ENV GOPROXY=https://proxy.golang.org,direct
+ENV GOSUMDB=off
+ENV GOFLAGS=-mod=mod
+ENV GOTOOLCHAIN=auto
+
+RUN apt-get update && apt-get install -y --no-install-recommends protobuf-compiler \
+    && rm -rf /var/lib/apt/lists/*
+RUN go install google.golang.org/protobuf/cmd/protoc-gen-go@v1.35.1 \
+ && go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@v1.5.1
+
+COPY . .
+RUN bash scripts/genproto.sh
+RUN go mod tidy
+RUN CGO_ENABLED=0 go build -o /out/server ./cmd/server
+
+FROM gcr.io/distroless/static-debian12
+COPY --from=builder /out/server /app
+COPY static /static
+ENV PORT=8080
+ENV STATIC_DIR=/static
+EXPOSE 8080
+ENTRYPOINT ["/app"]
