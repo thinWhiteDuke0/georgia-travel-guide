@@ -4,9 +4,16 @@
 # each microservice as its own service, plus managed PostgreSQL and the Flutter
 # web build.
 #
-# BEFORE DEPLOYING, apply the small TLS change to internal/gateway/clients.go
-# (see DEPLOY-NOTES). Render exposes services over HTTPS on :443, and gRPC
-# connections must be upgraded to TLS or the gateway cannot reach them.
+# TWO CHANGES ARE REQUIRED BEFORE THIS WILL WORK:
+#
+#   1. internal/gateway/clients.go — upgrade gRPC connections to TLS when the
+#      address ends in :443. Render serves everything over HTTPS, and a
+#      plaintext gRPC dial cannot reach it.
+#
+#   2. backend/Dockerfile — append the "all" stage that copies every binary
+#      into /bin. Render always builds the LAST stage of a Dockerfile and
+#      cannot pick a target, so each service selects its binary via
+#      dockerCommand below.
 #
 # Free-tier reality check:
 #   - free web services sleep after 15 min idle and take 30-60 s to wake
@@ -30,7 +37,7 @@ services:
     plan: free
     rootDir: backend
     dockerfilePath: ./Dockerfile
-    dockerTarget: gateway
+    dockerCommand: /bin/gateway
     healthCheckPath: /health
     autoDeploy: true
     envVars:
@@ -83,7 +90,7 @@ services:
     plan: free
     rootDir: backend
     dockerfilePath: ./Dockerfile
-    dockerTarget: city
+    dockerCommand: /bin/city
     autoDeploy: true
     envVars:
       - key: PORT
@@ -98,7 +105,7 @@ services:
     plan: free
     rootDir: backend
     dockerfilePath: ./Dockerfile
-    dockerTarget: places
+    dockerCommand: /bin/places
     autoDeploy: true
     envVars:
       - key: PORT
@@ -113,7 +120,7 @@ services:
     plan: free
     rootDir: backend
     dockerfilePath: ./Dockerfile
-    dockerTarget: route
+    dockerCommand: /bin/route
     autoDeploy: true
     envVars:
       - key: PORT
@@ -128,7 +135,7 @@ services:
     plan: free
     rootDir: backend
     dockerfilePath: ./Dockerfile
-    dockerTarget: favorite
+    dockerCommand: /bin/favorite
     autoDeploy: true
     envVars:
       - key: PORT
