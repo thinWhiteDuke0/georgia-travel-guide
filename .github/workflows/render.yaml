@@ -1,0 +1,158 @@
+# Render Blueprint — georgia-travel-guide
+#
+# Deploys the project exactly as the repository is structured: the gateway and
+# each microservice as its own service, plus managed PostgreSQL and the Flutter
+# web build.
+#
+# BEFORE DEPLOYING, apply the small TLS change to internal/gateway/clients.go
+# (see DEPLOY-NOTES). Render exposes services over HTTPS on :443, and gRPC
+# connections must be upgraded to TLS or the gateway cannot reach them.
+#
+# Free-tier reality check:
+#   - free web services sleep after 15 min idle and take 30-60 s to wake
+#   - a workspace gets 750 free instance-hours per month, shared by all
+#     services; six services will consume this quickly if kept warm
+#   - the free database is removed after roughly 30 days
+#   - the static site never sleeps
+
+databases:
+  - name: guide-db
+    databaseName: guide
+    user: guide
+    plan: free
+
+services:
+  # ------------------------------------------------------------- gateway
+  # The only public entry point: REST in, gRPC out to the services below.
+  - type: web
+    name: guide-gateway
+    runtime: docker
+    plan: free
+    rootDir: backend
+    dockerfilePath: ./Dockerfile
+    dockerTarget: gateway
+    healthCheckPath: /health
+    autoDeploy: true
+    envVars:
+      - key: JWT_SECRET
+        sync: false          # must be identical on guide-auth
+      - key: STATIC_DIR
+        value: /static
+      # Addresses of the other services. Fill these in after their first
+      # deploy, in the form  <service>.onrender.com:443
+      - key: AUTH_ADDR
+        sync: false
+      - key: CITY_ADDR
+        sync: false
+      - key: PLACES_ADDR
+        sync: false
+      - key: ROUTE_ADDR
+        sync: false
+      - key: FAVORITE_ADDR
+        sync: false
+
+  # ---------------------------------------------------- authentication
+  - type: web
+    name: guide-auth
+    runtime: docker
+    plan: free
+    rootDir: backend/services/auth
+    dockerfilePath: ./Dockerfile
+    autoDeploy: true
+    envVars:
+      - key: PORT
+        value: "5001"
+      - key: JWT_SECRET
+        sync: false          # exactly the same value as guide-gateway
+      # The .NET service builds its connection string from separate parts.
+      - key: DB_HOST
+        fromDatabase: { name: guide-db, property: host }
+      - key: DB_PORT
+        fromDatabase: { name: guide-db, property: port }
+      - key: DB_USER
+        fromDatabase: { name: guide-db, property: user }
+      - key: DB_PASSWORD
+        fromDatabase: { name: guide-db, property: password }
+      - key: DB_NAME
+        fromDatabase: { name: guide-db, property: database }
+
+  # --------------------------------------------------------- city service
+  - type: web
+    name: guide-city
+    runtime: docker
+    plan: free
+    rootDir: backend
+    dockerfilePath: ./Dockerfile
+    dockerTarget: city
+    autoDeploy: true
+    envVars:
+      - key: PORT
+        value: "5002"
+      - key: DATABASE_URL
+        fromDatabase: { name: guide-db, property: connectionString }
+
+  # ------------------------------------------------------- places service
+  - type: web
+    name: guide-places
+    runtime: docker
+    plan: free
+    rootDir: backend
+    dockerfilePath: ./Dockerfile
+    dockerTarget: places
+    autoDeploy: true
+    envVars:
+      - key: PORT
+        value: "5003"
+      - key: DATABASE_URL
+        fromDatabase: { name: guide-db, property: connectionString }
+
+  # -------------------------------------------------------- route service
+  - type: web
+    name: guide-route
+    runtime: docker
+    plan: free
+    rootDir: backend
+    dockerfilePath: ./Dockerfile
+    dockerTarget: route
+    autoDeploy: true
+    envVars:
+      - key: PORT
+        value: "5004"
+      - key: DATABASE_URL
+        fromDatabase: { name: guide-db, property: connectionString }
+
+  # ----------------------------------------------------- favorite service
+  - type: web
+    name: guide-favorite
+    runtime: docker
+    plan: free
+    rootDir: backend
+    dockerfilePath: ./Dockerfile
+    dockerTarget: favorite
+    autoDeploy: true
+    envVars:
+      - key: PORT
+        value: "5005"
+      - key: DATABASE_URL
+        fromDatabase: { name: guide-db, property: connectionString }
+
+  # ----------------------------------------------------- flutter web build
+  # Static sites are always on, so this is the most reliable thing to demo.
+  - type: web
+    name: guide-web
+    runtime: static
+    plan: free
+    rootDir: mobile
+    buildCommand: >-
+      flutter create --project-name georgia_travel_guide --platforms=web . &&
+      flutter pub get &&
+      flutter build web --release --dart-define=API_BASE_URL=$API_BASE_URL
+    staticPublishPath: build/web
+    autoDeploy: true
+    envVars:
+      - key: API_BASE_URL
+        sync: false          # https://guide-gateway-xxxx.onrender.com
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html
